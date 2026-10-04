@@ -1,0 +1,78 @@
+{
+  "server": {
+    "name": "fixture-notes",
+    "version": "0.1.0",
+    "protocolVersion": "2025-06-18",
+    "transport": "stdio",
+    "target": "python3 tests/fixtures/fixture-server.py"
+  },
+  "tools": [
+    {
+      "name": "notes_list",
+      "description": "List the names of all notes.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {}
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "notes_get",
+      "description": "Return the text of the note with the given name.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Note name."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "annotations": {
+        "readOnlyHint": true
+      }
+    },
+    {
+      "name": "notes_create",
+      "description": "Create a note.",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Note name."
+          },
+          "text": {
+            "type": "string",
+            "description": "Note text."
+          }
+        },
+        "required": [
+          "name",
+          "text"
+        ]
+      }
+    },
+    {
+      "name": "load_state",
+      "description": "Replace the notebook with the given state (test seeding).",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "state": {
+            "type": "object",
+            "description": "Environment dump."
+          }
+        },
+        "required": [
+          "state"
+        ]
+      }
+    }
+  ]
+}

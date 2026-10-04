@@ -1,0 +1,48 @@
+# agentdojo-mcp mapping for suite notes (v1.2.2)
+# server: fixture-notes 0.1.0
+# Proposed from tool names and schemas. Review every entry before you run it;
+# then check it with: agentdojo-mcp validate-mapping
+
+version: 1
+suite: notes
+benchmark_version: v1.2.2
+seed:
+  tool: load_state
+  argument: state
+tools:
+  # proposed: notes_create (score 0.82); next: notes_list 0.38, notes_get 0.22
+  # changes suite state: mode both keeps AgentDojo's copy for scoring
+  add_note:
+    server_tool: notes_create
+    mode: both
+    arguments:
+      body: text
+      title: name
+    constants: {}
+    drop: []
+    result: auto
+  # proposed: notes_list (score 1.00); next: notes_get 0.22, notes_create 0.21
+  list_notes:
+    server_tool: notes_list
+    mode: server
+    arguments: {}
+    constants: {}
+    drop: []
+    result: auto
+  # proposed: notes_get (score 0.82); next: notes_list 0.39, notes_create 0.22
+  read_note:
+    server_tool: notes_get
+    mode: server
+    arguments:
+      title: name
+    constants: {}
+    drop: []
+    result: auto
+  # no server tool scored 0.45 or more; best was notes_get 0.36; runs locally
+  search_notes:
+    server_tool: null
+    mode: local
+    arguments: {}
+    constants: {}
+    drop: []
+    result: auto

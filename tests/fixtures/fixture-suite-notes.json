@@ -1,0 +1,93 @@
+{
+  "format": "agentdojo-mcp/suite-dump",
+  "suite": "notes",
+  "benchmark_version": "v1.2.2",
+  "agentdojo_version": "0.1.35",
+  "tools": [
+    {
+      "name": "list_notes",
+      "description": "List the titles of all notes.",
+      "inputSchema": {
+        "properties": {},
+        "title": "Input schema for `list_notes`",
+        "type": "object"
+      },
+      "dependencies": [
+        "notebook"
+      ],
+      "mutates": null
+    },
+    {
+      "name": "read_note",
+      "description": "Read the body of a note.",
+      "inputSchema": {
+        "properties": {
+          "title": {
+            "description": "The title of the note.",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "Input schema for `read_note`",
+        "type": "object"
+      },
+      "dependencies": [
+        "notebook"
+      ],
+      "mutates": false
+    },
+    {
+      "name": "add_note",
+      "description": "Add a note.",
+      "inputSchema": {
+        "properties": {
+          "title": {
+            "description": "The title of the new note.",
+            "title": "Title",
+            "type": "string"
+          },
+          "body": {
+            "description": "The body of the new note.",
+            "title": "Body",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "body"
+        ],
+        "title": "Input schema for `add_note`",
+        "type": "object"
+      },
+      "dependencies": [
+        "notebook"
+      ],
+      "mutates": true
+    },
+    {
+      "name": "search_notes",
+      "description": "Find notes whose body contains the query.",
+      "inputSchema": {
+        "properties": {
+          "query": {
+            "description": "Text to look for.",
+            "title": "Query",
+            "type": "string"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "Input schema for `search_notes`",
+        "type": "object"
+      },
+      "dependencies": [
+        "notebook"
+      ],
+      "mutates": false
+    }
+  ]
+}

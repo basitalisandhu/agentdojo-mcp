@@ -1,0 +1,89 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  FIX: tests/fixtures
+
+jobs:
+  test:
+    name: Core (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+      - name: Install (core only; AgentDojo tests are skipped)
+        run: python -m pip install -e ".[dev]" build
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Test
+        run: python -m pytest -q -rs
+      - name: Inspect the fixture server, validate the fixture mapping, replay the fixture results
+        run: |
+          agentdojo-mcp inspect --stdio "python $FIX/fixture-server.py" --json -o /tmp/tools.json
+          agentdojo-mcp validate-mapping $FIX/fixture-mapping-notes.yaml --suite $FIX/fixture-suite-notes.json --server-dump /tmp/tools.json --strict
+          agentdojo-mcp replay $FIX/fixture-results.json --format markdown > /tmp/report.md
+          grep -q "Targeted attack success" /tmp/report.md
+          set +e; agentdojo-mcp run --suite banking --mapping $FIX/fixture-mapping-notes.yaml --stdio "python $FIX/fixture-server.py" --model ground-truth; test $? -eq 2 || exit 1
+      - name: Build and smoke-test the wheel
+        run: |
+          python -m build
+          python -m pip install --force-reinstall dist/*.whl
+          agentdojo-mcp --version
+
+  dojo:
+    name: With AgentDojo (bridge against the fixture server, no model, no network to a provider)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install with the dojo extra
+        run: python -m pip install -e ".[dev,dojo]"
+      - name: Test, including the dojo-marked integration tests
+        run: python -m pytest -q -m dojo -rs
+      - name: Run the bridge from the CLI with the ground-truth pipeline
+        run: |
+          agentdojo-mcp run --suite "$FIX/fixture-dojo-suite/fixture-suite.py:suite" \
+            --mapping $FIX/fixture-mapping-notes.yaml --stdio "python $FIX/fixture-server.py" \
+            --model ground-truth --attack direct --out-dir /tmp/out
+          python -c "import json; d=json.load(open('/tmp/out/results.json')); assert all(t['utility'] for t in d['user_tasks']), d['user_tasks']"
+      - name: Profile the built-in suites
+        run: agentdojo-mcp suites
+
+  container-build:
+    name: Build the container image and run it
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build the image, print --help and replay the fixture results from a mount
+        run: |
+          docker build --build-arg VERSION=ci -t agentdojo-mcp:ci .
+          docker run --rm agentdojo-mcp:ci --help > help.txt && grep "^usage: agentdojo-mcp" help.txt
+          docker run --rm agentdojo-mcp:ci --version
+          test "$(docker run --rm --entrypoint id agentdojo-mcp:ci -u)" = "1000"
+          docker run --rm -v "$PWD/tests/fixtures:/work:ro" agentdojo-mcp:ci replay fixture-results.json | grep "Targeted attack success"
+          docker run --rm -v "$PWD/tests/fixtures:/work:ro" agentdojo-mcp:ci validate-mapping fixture-mapping-notes.yaml --suite fixture-suite-notes.json --server-dump fixture-server-notes.json

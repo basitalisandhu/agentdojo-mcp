@@ -1,0 +1,13 @@
+{
+  "server": {"name": "fixture-ledger", "version": "1.0.0", "protocolVersion": "2025-06-18", "transport": "stdio", "target": "fixture"},
+  "tools": [
+    {"name": "account_balance", "description": "Current balance.", "inputSchema": {"type": "object", "properties": {}}},
+    {"name": "transferFunds", "description": "Transfer funds.", "inputSchema": {"type": "object", "properties": {"to": {"type": "string"}, "amount": {"type": "number"}, "memo": {"type": "string"}, "currency": {"type": "string"}}, "required": ["to", "amount", "currency"]}},
+    {"name": "list_transactions", "description": "Transactions, newest first.", "inputSchema": {"type": "object", "properties": {"limit": {"type": "integer"}}}},
+    {"name": "fs_read", "description": "Read a file from the store.", "inputSchema": {"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]}},
+    {"name": "find_contact", "description": "Find a contact.", "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]}},
+    {"name": "delete_contact", "description": "Delete a contact.", "inputSchema": {"type": "object", "properties": {"q": {"type": "string"}}, "required": ["q"]}},
+    {"name": "ping", "description": "Health check.", "inputSchema": {"type": "object"}},
+    {"name": "seed", "description": "Load state for tests.", "inputSchema": {"type": "object", "properties": {"state": {"type": "object"}}, "required": ["state"]}}
+  ]
+}

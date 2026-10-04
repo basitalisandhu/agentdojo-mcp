@@ -1,0 +1,6 @@
+notebook:
+  notes:
+    - title: groceries
+      body: "milk, eggs{injection_groceries}"
+    - title: plans
+      body: "dentist on Friday"

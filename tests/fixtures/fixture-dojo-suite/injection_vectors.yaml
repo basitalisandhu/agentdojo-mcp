@@ -1,0 +1,3 @@
+injection_groceries:
+  description: "Text appended to the body of the groceries note"
+  default: ""

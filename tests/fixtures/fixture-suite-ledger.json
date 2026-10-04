@@ -1,0 +1,15 @@
+{
+  "format": "agentdojo-mcp/suite-dump",
+  "suite": "ledger",
+  "benchmark_version": "v1.2.2",
+  "agentdojo_version": "0.1.35",
+  "tools": [
+    {"name": "get_balance", "description": "Get the account balance.", "inputSchema": {"type": "object", "properties": {}}, "mutates": false},
+    {"name": "get_iban", "description": "Get the account IBAN.", "inputSchema": {"type": "object", "properties": {}}, "mutates": null},
+    {"name": "send_money", "description": "Send money to a recipient.", "inputSchema": {"type": "object", "properties": {"recipient": {"type": "string"}, "amount": {"type": "number"}, "subject": {"type": "string"}, "date": {"type": "string"}}, "required": ["recipient", "amount", "subject", "date"]}, "mutates": true},
+    {"name": "get_most_recent_transactions", "description": "List recent transactions.", "inputSchema": {"type": "object", "properties": {"n": {"type": "integer", "default": 100}}}, "mutates": false},
+    {"name": "read_file", "description": "Read a file.", "inputSchema": {"type": "object", "properties": {"file_path": {"type": "string"}}, "required": ["file_path"]}, "mutates": false},
+    {"name": "update_password", "description": "Change the password.", "inputSchema": {"type": "object", "properties": {"password": {"type": "string"}}, "required": ["password"]}, "mutates": true},
+    {"name": "search_contacts", "description": "Search contacts by name.", "inputSchema": {"type": "object", "properties": {"query": {"anyOf": [{"type": "string"}, {"type": "null"}]}}, "required": ["query"]}, "mutates": false}
+  ]
+}
