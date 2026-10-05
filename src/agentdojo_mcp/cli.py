@@ -155,13 +155,13 @@ def build_parser() -> argparse.ArgumentParser:
         dest="tasks",
         action="append",
         metavar="ID",
-        help="user task id (repeatable; default: all)",
+        help="user task id or case-sensitive glob pattern (repeatable; default: all)",
     )
     p.add_argument(
         "--injection-task",
         action="append",
         metavar="ID",
-        help="injection task id (repeatable; default: all)",
+        help="injection task id or case-sensitive glob pattern (repeatable; default: all)",
     )
     p.add_argument(
         "--attack",
