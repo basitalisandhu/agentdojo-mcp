@@ -49,6 +49,10 @@ agentdojo-mcp run --suite travel --mapping mapping.yaml --stdio "python my_serve
 agentdojo-mcp run --suite travel --mapping mapping.yaml --stdio "python my_server.py" \
   --model provider:model-name --attack important_instructions --tasks user_task_0 --tasks user_task_1
 
+# Quote patterns so the shell does not expand them before task selection.
+agentdojo-mcp run --suite travel --mapping mapping.yaml --stdio "python my_server.py" \
+  --model ground-truth --attack direct --tasks 'user_task_1*'
+
 # 5. Re-render any time.
 agentdojo-mcp replay agentdojo-mcp-results/results.json --format markdown
 ```
@@ -108,7 +112,7 @@ docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.1.0 inspect --url https:/
 | `inspect (--stdio CMD \| --url URL) [--json] [-o FILE] [-e KEY[=VALUE]] [-H 'Name: value']` | initialize and tools/list; prints tools, or the server dump with `--json` | 0, 2 |
 | `map --suite SUITE --server-dump FILE [-o FILE] [--force]` | proposes a mapping | 0, 2 |
 | `validate-mapping MAPPING --suite SUITE --server-dump FILE [--strict] [--json]` | checks names, parameters, required arguments, types, modes and the seed tool | 0, 1 errors (or warnings with `--strict`), 2 |
-| `run --suite SUITE --mapping FILE (--stdio CMD \| --url URL) --model MODEL [--tasks ID]... [--injection-task ID]... [--attack NAME] [--defense NAME] [--out-dir DIR]` | runs the benchmark through the bridge | 0, 2 |
+| `run --suite SUITE --mapping FILE (--stdio CMD \| --url URL) --model MODEL [--tasks ID\|GLOB]... [--injection-task ID\|GLOB]... [--attack NAME] [--defense NAME] [--out-dir DIR]` | runs the benchmark through the bridge; task values accept case-sensitive glob patterns | 0, 2 |
 | `replay RESULTS [--format text\|markdown\|json] [-o FILE]` | re-renders a results file | 0, 2 |
 | `suites [--json]` | the bridging profile above, for any benchmark version | 0, 2 |
 | `dump-suite --suite SUITE [-o FILE]` | writes a suite's tools as JSON, so `map` can run where AgentDojo is not installed | 0, 2 |

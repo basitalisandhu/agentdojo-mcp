@@ -6,6 +6,10 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `run --tasks` and `--injection-task` accept case-sensitive glob patterns; a pattern that matches nothing is an error naming it.
+
 ## [0.1.0] - 2026-10-04
 
 ### Added
