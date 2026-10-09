@@ -100,9 +100,9 @@ uvx --from git+https://github.com/basitalisandhu/agentdojo-mcp agentdojo-mcp --h
 Container image: each release tag publishes `ghcr.io/basitalisandhu/agentdojo-mcp` (core only, linux/amd64 and linux/arm64), running as uid 1000 in `/work`. It suits `inspect` against HTTP servers, mapping work and `replay`:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/agentdojo-mcp:0.1.0 \
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/agentdojo-mcp:0.2.0 \
   replay results.json --format markdown
-docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.1.0 inspect --url https://mcp.example.com/mcp
+docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.2.0 inspect --url https://mcp.example.com/mcp
 ```
 
 ## Commands

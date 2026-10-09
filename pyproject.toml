@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentdojo-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Run AgentDojo against MCP servers: map a task suite's tools onto a real MCP server, run the benchmark's user tasks and injection tasks against the server's tool surface, and report utility and attack success per task with every call logged."
 readme = "README.md"
 requires-python = ">=3.11"

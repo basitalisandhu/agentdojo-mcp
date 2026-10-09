@@ -85,7 +85,8 @@ def test_readme_leads_with_the_search_phrase():
 def test_version_is_consistent():
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert re.search(rf'^version = "{re.escape(__version__)}"$', pyproject, re.M)
-    assert f"## [{__version__}] - 2026-10-04" in (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    changelog = (ROOT / "CHANGELOG.md").read_text(encoding="utf-8")
+    assert re.search(rf"^## \[{re.escape(__version__)}\] - \d{{4}}-\d{{2}}-\d{{2}}$", changelog, re.M)
 
 
 def test_mapping_doc_covers_every_mode_and_result_mode():
