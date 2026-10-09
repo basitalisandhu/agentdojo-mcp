@@ -25,6 +25,7 @@ import time
 import warnings
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
@@ -33,6 +34,26 @@ from .dojo import agentdojo_version, require
 from .mapping import Mapping, Seed, ToolMap
 from .mcp_client import McpClient, McpConnectionError, McpError, result_text
 from .results import RESULTS_FORMAT
+
+
+def pick_tasks(
+    ids: Sequence[str] | None, available: dict[str, Any], kind: str, suite_name: str
+) -> list[Any]:
+    """Expand case-sensitive task patterns, once each, in requested order."""
+    if not ids:
+        return list(available.values())
+    selected: dict[str, Any] = {}
+    missing = []
+    for pattern in ids:
+        matches = [name for name in available if fnmatchcase(name, pattern)]
+        if not matches:
+            missing.append(pattern)
+        for name in matches:
+            selected[name] = available[name]
+    if missing:
+        raise BridgeError(f"{kind} not in suite {suite_name}: {', '.join(map(repr, missing))}")
+    return list(selected.values())
+
 
 GROUND_TRUTH = "ground-truth"
 
@@ -315,16 +336,12 @@ def run_benchmark(
     notes: list[str] = []
     bsuite = bridged_suite(suite, mapping, client, log)
 
-    def pick(ids: Sequence[str] | None, available: dict[str, Any], kind: str) -> list[Any]:
-        if not ids:
-            return list(available.values())
-        missing = [i for i in ids if i not in available]
-        if missing:
-            raise BridgeError(f"{kind} not in suite {suite.name}: {', '.join(missing)}")
-        return [available[i] for i in ids]
-
-    uts = pick(user_tasks, suite.user_tasks, "user tasks")
-    its = pick(injection_tasks, suite.injection_tasks, "injection tasks") if attack else []
+    uts = pick_tasks(user_tasks, suite.user_tasks, "user tasks", suite.name)
+    its = (
+        pick_tasks(injection_tasks, suite.injection_tasks, "injection tasks", suite.name)
+        if attack
+        else []
+    )
 
     attack_obj = None
     if attack:
