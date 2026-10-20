@@ -73,5 +73,5 @@ def test_unknown_builtin_suite_lists_the_known_ones():
 
 @pytest.mark.dojo
 def test_unknown_benchmark_version():
-    with pytest.raises(dojo.SuiteError, match="no benchmark version 'v0.0.0'"):
+    with pytest.raises(dojo.SuiteError, match=r"no benchmark version 'v0\.0\.0'"):
         dojo.load_suite("banking", "v0.0.0")
