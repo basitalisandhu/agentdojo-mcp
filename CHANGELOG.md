@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `map` also reads tool descriptions: the first sentence of each description, read as a name, is compared with the other tool's name, and strong evidence (0.6 or more) can lift the name score. The ledger fixture now proposes `list_transactions` for `get_most_recent_transactions`, while a single shared word (`get_iban` against `account_balance`) still stays local (#2).
+
+### Changed
+
+- README first screen: who it is for, a three-line quick start that runs the bundled fixture suite end to end with no model or keys, and the start of the real report it prints. The `inspect` step in the quickstart drops `--json`, which printed the whole dump as well as writing it.
+
+### Tests
+
+- New `tests/test_dojo_load.py` covers suite loading errors (missing file, attribute that is not a `TaskSuite`, module that cannot be imported, unknown suite, unknown benchmark version), the module form, the missing-AgentDojo message and the version fallback.
+
 ## [0.2.0] - 2026-10-09
 
 ### Added

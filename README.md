@@ -6,9 +6,34 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 
+For people who build or review MCP servers and want AgentDojo's prompt injection numbers for their own tool surface. Try it on the bundled three-task fixture suite and fixture server, with no model, no keys and no network (Python 3.11 or newer):
+
 ```bash
-pip install "agentdojo-mcp[dojo] @ git+https://github.com/basitalisandhu/agentdojo-mcp"
+git clone https://github.com/basitalisandhu/agentdojo-mcp && cd agentdojo-mcp
+python3 -m venv .venv && . .venv/bin/activate && pip install ".[dojo]"
+agentdojo-mcp run --suite tests/fixtures/fixture-dojo-suite/fixture-suite.py:suite --mapping tests/fixtures/fixture-mapping-notes.yaml --stdio "python3 tests/fixtures/fixture-server.py" --model ground-truth --attack direct
 ```
+
+The start of the report from a real run of those three lines:
+
+```text
+agentdojo-mcp results
+
+  Suite                    notes (v1.2.2)
+  Server                   fixture-notes 0.1.0 over stdio
+  Mapping                  fixture-mapping-notes.yaml (1 both, 1 local, 2 server)
+  Model                    ground-truth
+  Attack                   direct
+  AgentDojo                0.1.35
+
+  Utility, no attack       3/3 (100.0%)
+  Utility under attack     3/3 (100.0%)
+  Targeted attack success  0/3 (0.0%)
+  Injection goals doable   1/1 (100.0%)
+  MCP calls                14 (0 errors, 894 result bytes)
+```
+
+`ground-truth` replays each task's reference solution, so it never follows an injection; the per-task table and every MCP call follow in the report, and `results.json` and `report.md` land in `agentdojo-mcp-results/`.
 
 ## Demo
 
@@ -34,8 +59,8 @@ It is for people who build or review MCP servers and agent stacks and want Agent
 ```bash
 pip install "agentdojo-mcp[dojo] @ git+https://github.com/basitalisandhu/agentdojo-mcp"
 
-# 1. What does the server offer?
-agentdojo-mcp inspect --stdio "python my_server.py" --json -o tools.json
+# 1. What does the server offer? (-o writes the JSON dump and prints a readable list.)
+agentdojo-mcp inspect --stdio "python my_server.py" -o tools.json
 
 # 2. Propose a mapping for a suite, then edit it.
 agentdojo-mcp map --suite travel --server-dump tools.json -o mapping.yaml
@@ -146,7 +171,7 @@ Attacks that address the model by name (`important_instructions` and its variant
 
 ## Contributing
 
-Issues and pull requests are welcome, especially mapping files for public MCP servers, proposal misses with the two dumps that show them, and transport problems with a minimal server. Run `make check` (ruff and pytest) and read [CONTRIBUTING.md](CONTRIBUTING.md); [docs/good-first-issues.md](docs/good-first-issues.md) lists six scoped starting points. Security problems: see [SECURITY.md](SECURITY.md).
+Issues and pull requests are welcome, especially mapping files for public MCP servers, proposal misses with the two dumps that show them, and transport problems with a minimal server. Run `make check` (ruff and pytest) and read [CONTRIBUTING.md](CONTRIBUTING.md); the [good first issue](https://github.com/basitalisandhu/agentdojo-mcp/labels/good%20first%20issue) label lists scoped starting points, and [docs/good-first-issues.md](docs/good-first-issues.md) has the full write-ups. Security problems: see [SECURITY.md](SECURITY.md).
 
 ## Related projects
 

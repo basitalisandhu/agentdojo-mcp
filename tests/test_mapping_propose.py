@@ -3,11 +3,14 @@ from __future__ import annotations
 import pytest
 
 from agentdojo_mcp.mapping import (
+    description_phrase,
+    description_similarity,
     dumps,
     from_data,
     load,
     name_similarity,
     propose,
+    score_pair,
     to_data,
     tokens,
     validate,
@@ -124,3 +127,37 @@ def test_mapping_without_seed_writes_a_commented_hint(notes):
     text = dumps(propose(suite, server, "notes", None))
     assert "# seed:" in text and "\nseed:" not in text
     assert from_data(to_data(propose(suite, server, "notes", None))).seed is None
+
+
+def test_description_phrase_takes_the_first_sentence_without_stop_words():
+    assert description_phrase("List recent transactions.") == "List_recent_transactions"
+    assert description_phrase("Get the account IBAN. More text.") == "Get_account_IBAN"
+    assert description_phrase("") == ""
+    assert description_phrase("one two three four five six seven eight") == (
+        "one_two_three_four_five_six"
+    )
+
+
+def test_description_similarity_rescues_a_pair_names_miss(ledger):
+    suite, server = ledger
+    recent = suite.tools["get_most_recent_transactions"]
+    listing = server.tools["list_transactions"]
+    assert name_similarity(recent.name, listing.name) < 0.45
+    assert description_similarity(recent, listing) >= 0.6
+    assert score_pair(recent, listing)[0] >= 0.45
+
+
+def test_ledger_proposes_list_transactions_from_the_descriptions(ledger):
+    suite, server = ledger
+    tools = propose(suite, server, "ledger", None).tools
+    assert tools["get_most_recent_transactions"].server_tool == "list_transactions"
+    # A single shared description word is not enough evidence.
+    assert tools["get_iban"].server_tool is None and tools["get_iban"].mode == "local"
+
+
+def test_weak_description_overlap_leaves_the_score_unchanged(ledger):
+    suite, server = ledger
+    iban, balance = suite.tools["get_iban"], server.tools["account_balance"]
+    assert description_similarity(iban, balance) < 0.6
+    name_only = 0.65 * name_similarity(iban.name, balance.name)
+    assert score_pair(iban, balance)[0] < 0.45 and score_pair(iban, balance)[0] >= name_only
