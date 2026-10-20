@@ -37,6 +37,43 @@ MODES = ("server", "both", "local")
 RESULT_MODES = ("auto", "text", "json")
 PROPOSE_THRESHOLD = 0.45
 PARAM_THRESHOLD = 0.5
+# Description evidence: a tool's description, read as a name, compared with the other tool's name.
+# It counts only when it is strong, and slightly discounted, so matching names still decide.
+DESCRIPTION_MIN = 0.6
+DESCRIPTION_WEIGHT = 0.9
+DESCRIPTION_WORDS = 6
+STOP_WORDS = frozenset(
+    [
+        "a",
+        "an",
+        "and",
+        "are",
+        "as",
+        "at",
+        "be",
+        "by",
+        "for",
+        "from",
+        "given",
+        "in",
+        "into",
+        "is",
+        "it",
+        "its",
+        "of",
+        "on",
+        "or",
+        "that",
+        "the",
+        "their",
+        "this",
+        "to",
+        "which",
+        "whose",
+        "with",
+        "your",
+    ]
+)
 # Verb families: a reading verb and a writing verb, or two different writing verbs, mean the
 # names describe different actions even when they share a noun.
 READ_VERBS = frozenset({"get", "list", "search"})
@@ -403,9 +440,33 @@ def match_params(suite: ToolSpec, server: ToolSpec) -> tuple[dict[str, str], flo
     return pairs, max(0.0, round(coverage - penalty, 4))
 
 
+def description_phrase(description: str) -> str:
+    """The first sentence of a description as a tool-like name: its first few words that are not
+    stop words, joined with ``_`` ("List recent transactions." -> ``List_recent_transactions``)."""
+    first = re.split(r"(?<=[.!?])\s|\n", (description or "").strip(), maxsplit=1)[0]
+    words = [w for w in re.findall(r"[A-Za-z0-9]+", first) if w.lower() not in STOP_WORDS]
+    return "_".join(words[:DESCRIPTION_WORDS])
+
+
+def description_similarity(suite: ToolSpec, server: ToolSpec) -> float:
+    """0..1: the better of each tool's description phrase against the other tool's name."""
+    best = 0.0
+    phrase = description_phrase(suite.description)
+    if phrase:
+        best = max(best, name_similarity(phrase, server.name))
+    phrase = description_phrase(server.description)
+    if phrase:
+        best = max(best, name_similarity(suite.name, phrase))
+    return best
+
+
 def score_pair(suite: ToolSpec, server: ToolSpec) -> tuple[float, dict[str, str]]:
     pairs, shape = match_params(suite, server)
-    return round(0.65 * name_similarity(suite.name, server.name) + 0.35 * shape, 4), pairs
+    name = name_similarity(suite.name, server.name)
+    described = description_similarity(suite, server)
+    if described >= DESCRIPTION_MIN:
+        name = max(name, DESCRIPTION_WEIGHT * described)
+    return round(0.65 * name + 0.35 * shape, 4), pairs
 
 
 def propose(

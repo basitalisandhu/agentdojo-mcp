@@ -12,14 +12,9 @@ Issues the maintainer intends to open under the `good first issue` label, writte
 - Exit code 1 when attack success went up or utility went down, 0 otherwise.
 - Tests build two small results documents in `tmp_path`.
 
-## 2. Description similarity in `map`
+## 2. Description similarity in `map` (done)
 
-**Context.** Names alone miss pairs like `get_most_recent_transactions` and `list_transactions` (see `tests/fixtures/fixture-suite-ledger.json`).
-
-**Acceptance criteria.**
-
-- Tool descriptions contribute a token-overlap term to the score, documented in `docs/mapping.md`.
-- The ledger fixture proposes `list_transactions` for `get_most_recent_transactions`; no existing proposal test changes.
+Shipped in `map` scoring ([#2](https://github.com/basitalisandhu/agentdojo-mcp/issues/2)); see [mapping.md](mapping.md#how-proposals-are-scored).
 
 ## 3. `inspect --format markdown`
 
