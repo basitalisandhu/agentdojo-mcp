@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
 ### Added
 
 - `map` also reads tool descriptions: the first sentence of each description, read as a name, is compared with the other tool's name, and strong evidence (0.6 or more) can lift the name score. The ledger fixture now proposes `list_transactions` for `get_most_recent_transactions`, while a single shared word (`get_iban` against `account_balance`) still stays local (#2).
@@ -36,6 +38,7 @@ All notable changes to this project are documented here. The format follows
 - `agentdojo-mcp suites` and `dump-suite`: the bridging profile of AgentDojo's built-in suites, and suite dumps for offline mapping.
 - Fixture MCP server, fixture AgentDojo suite and fixture results; CI on Python 3.11 and 3.12 with a separate AgentDojo job; container image `ghcr.io/basitalisandhu/agentdojo-mcp` published on version tags with an SPDX SBOM, a build provenance attestation and a keyless cosign signature; PyPI trusted publishing, off until the repository variable `PYPI_PUBLISH` is set.
 
-[Unreleased]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/basitalisandhu/agentdojo-mcp/releases/tag/v0.1.0
