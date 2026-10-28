@@ -24,6 +24,7 @@ The full reference is docs/mapping.md.
 from __future__ import annotations
 
 import difflib
+import functools
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -285,6 +286,8 @@ def load(path: Path) -> Mapping:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
         raise MappingError(f"cannot read {path}: {exc.strerror or exc}") from exc
+    except UnicodeDecodeError as exc:
+        raise MappingError(f"{path}: not UTF-8 text (byte {exc.start})") from exc
     try:
         data = yamlish.load(text)
     except yamlish.YamlError as exc:
@@ -354,6 +357,13 @@ def dumps(mapping: Mapping) -> str:
 
 def tokens(name: str) -> list[str]:
     """Split snake_case, kebab-case, dotted and camelCase names into folded lowercase tokens."""
+    return list(_tokens(name))
+
+
+# propose() scores every suite tool against every server tool, so the same names and
+# descriptions are tokenised many times over; these pure string functions are cached.
+@functools.lru_cache(maxsize=65536)
+def _tokens(name: str) -> tuple[str, ...]:
     spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name)
     spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", spaced)
     parts = [p for p in re.split(r"[^A-Za-z0-9]+", spaced.lower()) if p]
@@ -365,7 +375,7 @@ def tokens(name: str) -> list[str]:
         if len(p) > 3 and p.endswith("s") and not p.endswith("ss"):
             p = p[:-1]  # notes -> note, so plural and singular names compare equal
         out.append(SYNONYMS.get(p, p))
-    return out
+    return tuple(out)
 
 
 def _verbs_conflict(a: set[str], b: set[str]) -> bool:
@@ -375,9 +385,10 @@ def _verbs_conflict(a: set[str], b: set[str]) -> bool:
     return bool(wa and wb and not wa & wb)
 
 
+@functools.lru_cache(maxsize=262144)
 def name_similarity(a: str, b: str) -> float:
     """0..1: Dice overlap of folded tokens blended with a character-level ratio."""
-    ta, tb = tokens(a), tokens(b)
+    ta, tb = _tokens(a), _tokens(b)
     if not ta or not tb:
         return 0.0
     if ta == tb:
@@ -440,6 +451,7 @@ def match_params(suite: ToolSpec, server: ToolSpec) -> tuple[dict[str, str], flo
     return pairs, max(0.0, round(coverage - penalty, 4))
 
 
+@functools.lru_cache(maxsize=65536)
 def description_phrase(description: str) -> str:
     """The first sentence of a description as a tool-like name: its first few words that are not
     stop words, joined with ``_`` ("List recent transactions." -> ``List_recent_transactions``)."""

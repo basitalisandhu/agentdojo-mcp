@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -31,13 +32,25 @@ DESCRIPTION = (
 )
 EPILOG = (
     'Commands that need AgentDojo (run, suites, dump-suite): pip install "agentdojo-mcp[dojo]".\n'
-    "Exit codes: 0 ok, 1 validation errors (validate-mapping), 2 usage, I/O or server errors.\n"
+    "Exit codes: 0 ok, 1 validation errors (validate-mapping) or a regression (replay --diff),\n"
+    "2 usage, I/O or server errors.\n"
     "Docs: https://github.com/basitalisandhu/agentdojo-mcp"
 )
 
 
 class _Formatter(argparse.RawDescriptionHelpFormatter):
     pass
+
+
+def _seconds(text: str) -> float:
+    """``--timeout``: a positive, finite number of seconds."""
+    try:
+        value = float(text)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected a number of seconds, got {text!r}") from None
+    if not math.isfinite(value) or value <= 0:
+        raise argparse.ArgumentTypeError(f"expected a positive number of seconds, got {text!r}")
+    return value
 
 
 def _server_args(p: argparse.ArgumentParser, required: bool = True) -> None:
@@ -62,7 +75,7 @@ def _server_args(p: argparse.ArgumentParser, required: bool = True) -> None:
         help="HTTP header for --url; a value written ${VAR} is read from the environment",
     )
     p.add_argument(
-        "--timeout", type=float, default=DEFAULT_TIMEOUT, help="seconds per request (default 30)"
+        "--timeout", type=_seconds, default=DEFAULT_TIMEOUT, help="seconds per request (default 30)"
     )
     p.add_argument(
         "--allow-http", action="store_true", help="accept plain http for hosts other than localhost"
@@ -181,11 +194,20 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser(
         "replay",
         help="re-render the report of a results file (offline)",
-        description="Render a results.json from run as text, Markdown or a JSON summary. "
-        "Nothing is executed and no network is used.",
+        description="Render a results.json from run as text, Markdown or a JSON summary, or "
+        "with --diff compare it with an earlier results file. Nothing is executed and no "
+        "network is used.",
         formatter_class=_Formatter,
     )
     p.add_argument("results", type=Path)
+    p.add_argument(
+        "--diff",
+        type=Path,
+        metavar="OLD",
+        help="compare with an earlier results.json: list the tasks and pairs whose utility or "
+        "attack success changed and the change in each headline rate; exit 1 when attack "
+        "success went up or utility went down",
+    )
     p.add_argument("--format", choices=FORMATS, default="text")
     p.add_argument("-o", "--output", type=Path, help="write to a file instead of stdout")
 
@@ -261,15 +283,20 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         f"{server['transport']}  {len(dump['tools'])} tools"
     )
     for tool in dump["tools"]:
-        schema = tool.get("inputSchema") or {}
-        props = schema.get("properties") or {}
-        required = set(schema.get("required") or [])
+        schema = tool.get("inputSchema")
+        schema = schema if isinstance(schema, dict) else {}
+        props = schema.get("properties")
+        props = props if isinstance(props, dict) else {}
+        required = schema.get("required")
+        required = (
+            {r for r in required if isinstance(r, str)} if isinstance(required, list) else set()
+        )
         params = ", ".join(
             f"{name}{'' if name in required else '?'}: {(p or {}).get('type', 'any') if isinstance(p, dict) else 'any'}"
             for name, p in props.items()
         )
         print(f"  {tool['name']}({params})")
-        desc = (tool.get("description") or "").strip().splitlines()
+        desc = str(tool.get("description") or "").strip().splitlines()
         if desc:
             print(f"      {desc[0][:96]}")
     return EXIT_OK
@@ -376,6 +403,13 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_replay(args: argparse.Namespace) -> int:
     data = load_results(args.results)
+    if args.diff is not None:
+        from .report import render_diff
+        from .results import diff
+
+        d = diff(data, load_results(args.diff))
+        _write(render_diff(d, str(args.results), str(args.diff), args.format), args.output)
+        return EXIT_FINDINGS if d["regressed"] else EXIT_OK
     _write(render(data, args.format), args.output)
     return EXIT_OK
 

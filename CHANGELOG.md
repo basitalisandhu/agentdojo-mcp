@@ -6,6 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
+### Added
+
+- `replay NEW --diff OLD` compares two results files: each headline rate before and after, every user task, injection task and pair whose utility or attack success changed, and the tasks found in only one file. It exits 1 when targeted attack success went up or utility (without or under attack) went down, so it works as a regression gate; `--format markdown` and `--format json` work too (#1).
+- README: a Troubleshooting section, and a CI job that follows the quick start exactly on a fresh virtual environment.
+- Fuzz and property tests (Hypothesis) for the mapping reader, server and suite dumps, results files, messages from a stdio server and command-line values, and scaling tests that fail on quadratic work.
+
+### Fixed
+
+- A stdio server that printed a deeply nested JSON line, or bytes that are not UTF-8, stopped the client's reader thread, so every request then waited for the full `--timeout` and failed with a misleading message; such lines are now skipped like other non-protocol output, and a reader that stops always wakes the waiting request.
+- An `initialize` result whose `serverInfo` was not an object, or a tool without a string name in `tools/list`, raised `AttributeError` or `KeyError`; the first is read as unnamed, the second is skipped, and a `nextCursor` that is not a string is an error.
+- Mapping files that were not UTF-8 or nested too deeply, server dumps and results files nested too deeply, and a tool schema whose `required` was not a list ended in a traceback; each is now a one-line error with exit code 2 (or, for `required`, read as no required parameters).
+- `replay` crashed on results files with a task without a string `id`, a non-object `mapping`, `server` or `mapping.tools` entry, a non-numeric `result_bytes` or an unusual `seq`; the file is now checked up front with a message naming the key, and odd values render as they are.
+- `--timeout` accepted zero, negative values, `nan` and `inf` (the last crashed); it now needs a positive number of seconds. `--env` rejects names that are not variable names, `--header` rejects invalid header names and line breaks in values, and a `--stdio` command with an unclosed quote or a NUL byte is a clear error.
+
+### Changed
+
+- `run --tasks` and `--injection-task` look plain ids up directly; selecting many tasks by id was quadratic in the number of ids. `map` caches name tokenisation and similarity scores, which speeds up proposals for large tool sets.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added
@@ -38,7 +58,8 @@ All notable changes to this project are documented here. The format follows
 - `agentdojo-mcp suites` and `dump-suite`: the bridging profile of AgentDojo's built-in suites, and suite dumps for offline mapping.
 - Fixture MCP server, fixture AgentDojo suite and fixture results; CI on Python 3.11 and 3.12 with a separate AgentDojo job; container image `ghcr.io/basitalisandhu/agentdojo-mcp` published on version tags with an SPDX SBOM, a build provenance attestation and a keyless cosign signature; PyPI trusted publishing, off until the repository variable `PYPI_PUBLISH` is set.
 
-[Unreleased]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/basitalisandhu/agentdojo-mcp/releases/tag/v0.1.0

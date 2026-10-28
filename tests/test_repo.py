@@ -108,3 +108,24 @@ def test_readme_cites_agentdojo_issues_by_url():
         assert f"https://github.com/ethz-spylab/agentdojo/issues/{number}" in readme or (
             f"https://github.com/ethz-spylab/agentdojo/pull/{number}" in readme
         ), number
+
+
+def test_readme_quick_start_is_what_ci_runs():
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "readme_quickstart", ROOT / "scripts" / "readme_quickstart.py"
+    )
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    lines = mod.quickstart((ROOT / "README.md").read_text(encoding="utf-8"))
+    assert lines[0] == f"git clone {mod.CLONE_URL} && cd agentdojo-mcp"
+    assert lines[-1].startswith("agentdojo-mcp run --suite tests/fixtures/")
+    script = mod.as_script(lines, ROOT)
+    assert f"git clone {ROOT} && cd agentdojo-mcp" in script
+    ci = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "scripts/readme_quickstart.py" in ci
+
+
+def test_readme_has_troubleshooting():
+    assert "## Troubleshooting" in (ROOT / "README.md").read_text(encoding="utf-8")
