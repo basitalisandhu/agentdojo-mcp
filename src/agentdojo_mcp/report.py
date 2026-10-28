@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .results import Summary, summarise, tool_usage
+from .results import Rate, Summary, summarise, tool_usage
 
 FORMATS = ("text", "markdown", "json")
 ARG_WIDTH = 60
@@ -33,7 +33,7 @@ def _header(data: dict[str, Any]) -> list[tuple[str, str]]:
     for entry in (mapping.get("tools") or {}).values():
         modes[entry.get("mode", "local")] = modes.get(entry.get("mode", "local"), 0) + 1
     mode_text = ", ".join(f"{n} {m}" for m, n in sorted(modes.items())) or "-"
-    srv = " ".join(x for x in (server.get("name"), server.get("version")) if x) or "-"
+    srv = " ".join(str(x) for x in (server.get("name"), server.get("version")) if x) or "-"
     return [
         ("Suite", f"{data.get('suite', '-')} ({data.get('benchmark_version') or '-'})"),
         ("Server", f"{srv} over {server.get('transport') or '-'}"),
@@ -195,3 +195,61 @@ def render(data: dict[str, Any], fmt: str) -> str:
     if fmt == "json":
         return render_json(data)
     return render_text(data)
+
+
+def _rate_text(r: dict[str, int]) -> str:
+    return str(Rate(r["hits"], r["total"]))
+
+
+def _change(value: Any) -> str:
+    return "absent" if value == "absent" else _yes(value)
+
+
+def render_diff(d: dict[str, Any], fmt: str = "text") -> str:
+    """Render :func:`results.diff` as text, Markdown or JSON."""
+    if fmt == "json":
+        return json.dumps(d, indent=2) + "\n"
+    md = fmt == "markdown"
+    out: list[str] = ["# agentdojo-mcp diff" if md else "agentdojo-mcp diff (old -> new)", ""]
+    if md:
+        out += ["| Measure | Old | New |", "|---|---|---|"]
+        out += [
+            f"| {r['measure']} | {_rate_text(r['old'])} | {_rate_text(r['new'])} |"
+            for r in d["rates"]
+        ]
+    else:
+        width = max(len(r["measure"]) for r in d["rates"])
+        out += [
+            f"  {r['measure']:<{width}}  {_rate_text(r['old'])} -> {_rate_text(r['new'])}"
+            for r in d["rates"]
+        ]
+    lines: list[str] = []
+    for t in d["user_tasks"]:
+        mark = "REGRESSION " if t["regression"] else ""
+        lines.append(
+            f"{mark}{t['user_task']}: utility {_change(t['utility'][0])} -> "
+            f"{_change(t['utility'][1])}"
+        )
+    for p in d["pairs"]:
+        name = f"{p['user_task']} + {p['injection_task']}"
+        if "only_in" in p:
+            lines.append(f"{name}: only in the {p['only_in']} run")
+            continue
+        parts = []
+        if p["utility"][0] != p["utility"][1]:
+            parts.append(f"utility {_yes(p['utility'][0])} -> {_yes(p['utility'][1])}")
+        if p["attack_success"][0] != p["attack_success"][1]:
+            parts.append(
+                f"attack succeeded {_yes(p['attack_success'][0])} -> {_yes(p['attack_success'][1])}"
+            )
+        mark = "REGRESSION " if p["regression"] else ""
+        lines.append(f"{mark}{name}: {', '.join(parts)}")
+    out += ["", "## Changed tasks", ""] if md else ["", "Changed tasks"]
+    if lines:
+        out += [f"- {line}" if md else f"  {line}" for line in lines]
+    else:
+        out.append("No task changed." if md else "  none")
+    if d["notes"]:
+        out += [""] + [f"note: {n}" for n in d["notes"]]
+    out += ["", f"{d['regressions']} regression(s)"]
+    return "\n".join(out) + "\n"

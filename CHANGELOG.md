@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-28
+
+### Added
+
+- `replay NEW --diff OLD` lists the user tasks and pairs whose utility or attack success changed, with old and new headline rates, as text, Markdown or JSON. Exit code 1 when a task or pair lost utility or an attack newly succeeded, so it works as a regression gate (#1).
+- README "Troubleshooting" table with real messages and fixes, and a "Comparing two runs" section.
+- `scripts/e2e_quickstart.sh` runs the README quick start against a freshly installed wheel with the `dojo` extra in a temporary directory, then replays and diffs the result; CI runs it.
+- Seeded, time-limited fuzz tests over the YAML subset, mapping files, server and suite dumps, results files and server replies, with scaling tests.
+
+### Fixed
+
+- A server that wrote bytes that are not UTF-8 on stdout killed the reader thread, so every later request waited for its full timeout; such lines are now skipped like other non-protocol output. Lines nested too deeply to parse are skipped too, and HTTP responses nested too deeply are an error instead of a `RecursionError`.
+- `replay` accepted results files whose fields had the wrong type and then failed inside the report with `AttributeError`, `KeyError` or `TypeError`; `check` now names the bad field (for example `calls[3].result_bytes must be an integer`). Non-UTF-8 and too deeply nested results files, mapping files and dumps exit 2 with a message.
+- Mapping files nested deeper than 100 levels, or holding JSON flow values nested past the recursion limit, crashed the YAML reader with `RecursionError`; they are now a `YamlError` with the line number.
+- Mapping errors now name the file (`m.yaml: tools.t.mode: ...`), and a UTF-8 byte order mark is accepted.
+- A `--stdio` command with an unclosed quote, and an `-o` or `--out-dir` that cannot be written, exit 2 with a message instead of a traceback; `run` checks `--out-dir` before the run starts.
+- `inspect` no longer fails on a tool whose `inputSchema`, `properties`, `required` or `description` has an unexpected type, and tools without a string name are left out of the dump.
+
+### Changed
+
+- `map` caches name comparisons: proposing a mapping for 30 suite tools against 300 server tools took 2.39 s and now takes 1.07 s on the same machine.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added

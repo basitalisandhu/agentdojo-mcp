@@ -24,6 +24,7 @@ The full reference is docs/mapping.md.
 from __future__ import annotations
 
 import difflib
+import functools
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -241,7 +242,7 @@ def from_data(data: Any) -> Mapping:
             entry = {}
         if not isinstance(entry, dict):
             raise MappingError(f"{where}: expected a mapping")
-        unknown = set(entry) - {
+        unknown = {str(k) for k in entry} - {
             "server_tool",
             "mode",
             "arguments",
@@ -282,14 +283,24 @@ def from_data(data: Any) -> Mapping:
 
 def load(path: Path) -> Mapping:
     try:
-        text = path.read_text(encoding="utf-8")
+        raw = path.read_bytes()
     except OSError as exc:
         raise MappingError(f"cannot read {path}: {exc.strerror or exc}") from exc
+    try:
+        text = raw.decode("utf-8-sig")
+    except UnicodeDecodeError as exc:
+        raise MappingError(
+            f"{path}: not UTF-8 text (byte 0x{raw[exc.start]:02x} at offset {exc.start}); "
+            "save it as UTF-8"
+        ) from None
     try:
         data = yamlish.load(text)
     except yamlish.YamlError as exc:
         raise MappingError(f"{path}: {exc}") from exc
-    return from_data(data)
+    try:
+        return from_data(data)
+    except MappingError as exc:
+        raise MappingError(f"{path}: {exc}") from None
 
 
 def to_data(mapping: Mapping) -> dict[str, Any]:
@@ -354,6 +365,11 @@ def dumps(mapping: Mapping) -> str:
 
 def tokens(name: str) -> list[str]:
     """Split snake_case, kebab-case, dotted and camelCase names into folded lowercase tokens."""
+    return list(_tokens(name))
+
+
+@functools.lru_cache(maxsize=65536)
+def _tokens(name: str) -> tuple[str, ...]:
     spaced = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name)
     spaced = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", spaced)
     parts = [p for p in re.split(r"[^A-Za-z0-9]+", spaced.lower()) if p]
@@ -365,7 +381,7 @@ def tokens(name: str) -> list[str]:
         if len(p) > 3 and p.endswith("s") and not p.endswith("ss"):
             p = p[:-1]  # notes -> note, so plural and singular names compare equal
         out.append(SYNONYMS.get(p, p))
-    return out
+    return tuple(out)
 
 
 def _verbs_conflict(a: set[str], b: set[str]) -> bool:
@@ -375,9 +391,14 @@ def _verbs_conflict(a: set[str], b: set[str]) -> bool:
     return bool(wa and wb and not wa & wb)
 
 
+@functools.lru_cache(maxsize=262144)
 def name_similarity(a: str, b: str) -> float:
-    """0..1: Dice overlap of folded tokens blended with a character-level ratio."""
-    ta, tb = tokens(a), tokens(b)
+    """0..1: Dice overlap of folded tokens blended with a character-level ratio.
+
+    Cached: ``propose`` compares every suite tool and parameter with every server tool and
+    parameter, and the same parameter names (``id``, ``path``, ``query``) recur across tools.
+    """
+    ta, tb = _tokens(a), _tokens(b)
     if not ta or not tb:
         return 0.0
     if ta == tb:

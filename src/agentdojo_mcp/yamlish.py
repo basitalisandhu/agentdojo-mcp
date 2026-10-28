@@ -18,6 +18,9 @@ _NUMBER = re.compile(r"^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][-+]?[0-9]+)?$")
 _RESERVED = {"true", "false", "null", "yes", "no", "on", "off", "~", ""}
 
 
+MAX_DEPTH = 100
+
+
 class YamlError(ValueError):
     def __init__(self, message: str, line: int | None = None) -> None:
         super().__init__(f"line {line}: {message}" if line else message)
@@ -104,6 +107,8 @@ def parse_scalar(text: str, line: int | None = None) -> Any:
             return json.loads(text)
         except ValueError as exc:
             raise YamlError(f"cannot parse {text!r} as a JSON flow value: {exc}", line) from exc
+        except RecursionError:
+            raise YamlError("JSON flow value nested too deeply", line) from None
     if text[0] == "'":
         if len(text) < 2 or text[-1] != "'":
             raise YamlError(f"unterminated single-quoted string {text!r}", line)
@@ -139,6 +144,8 @@ def load(text: str) -> Any:
             return json.loads(text)
         except ValueError as exc:
             raise YamlError(f"invalid JSON: {exc}") from exc
+        except RecursionError:
+            raise YamlError("invalid JSON: nested too deeply") from None
     rows: list[tuple[int, int, str]] = []
     for number, raw in enumerate(text.splitlines(), start=1):
         if "\t" in raw[: len(raw) - len(raw.lstrip())]:
@@ -149,6 +156,11 @@ def load(text: str) -> Any:
         rows.append((number, len(content) - len(content.lstrip(" ")), content.strip()))
     if not rows:
         return None
+    # Each nesting level is one recursive call; a mapping file needs a handful. Refuse absurd
+    # depth with a clear error instead of hitting Python's recursion limit.
+    for number, ind, _content in rows:
+        if ind > 2 * MAX_DEPTH:
+            raise YamlError(f"nested deeper than {MAX_DEPTH} levels", number)
     value, pos = _block(rows, 0, rows[0][1])
     if pos != len(rows):
         raise YamlError("unexpected indentation", rows[pos][0])

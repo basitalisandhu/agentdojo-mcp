@@ -14,8 +14,9 @@ from .mapping import MappingError, propose, validate
 from .mapping import dumps as dump_mapping
 from .mapping import load as load_mapping
 from .mcp_client import DEFAULT_TIMEOUT, McpError, connect
-from .report import FORMATS, render
+from .report import FORMATS, render, render_diff
 from .results import ResultsError
+from .results import diff as results_diff
 from .results import dump as dump_results
 from .results import load as load_results
 from .schema import DumpError, Surface, load_server_dump, load_suite_dump, suite_surface
@@ -188,6 +189,13 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("results", type=Path)
     p.add_argument("--format", choices=FORMATS, default="text")
     p.add_argument("-o", "--output", type=Path, help="write to a file instead of stdout")
+    p.add_argument(
+        "--diff",
+        type=Path,
+        metavar="OLD",
+        help="compare with an earlier results file: changed tasks and rates; exit 1 when a task "
+        "or pair lost utility or an attack newly succeeded",
+    )
 
     p = sub.add_parser(
         "suites",
@@ -218,8 +226,11 @@ def _write(text: str, output: Path | None) -> None:
     if output is None:
         sys.stdout.write(text)
     else:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        output.write_text(text, encoding="utf-8")
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            output.write_text(text, encoding="utf-8")
+        except OSError as exc:
+            raise DumpError(f"cannot write {output}: {exc.strerror or exc}") from None
         print(f"wrote {output}", file=sys.stderr)
 
 
@@ -261,15 +272,20 @@ def cmd_inspect(args: argparse.Namespace) -> int:
         f"{server['transport']}  {len(dump['tools'])} tools"
     )
     for tool in dump["tools"]:
-        schema = tool.get("inputSchema") or {}
-        props = schema.get("properties") or {}
-        required = set(schema.get("required") or [])
+        schema = tool.get("inputSchema")
+        schema = schema if isinstance(schema, dict) else {}
+        props = schema.get("properties")
+        props = props if isinstance(props, dict) else {}
+        required = schema.get("required")
+        required = (
+            {r for r in required if isinstance(r, str)} if isinstance(required, list) else set()
+        )
         params = ", ".join(
             f"{name}{'' if name in required else '?'}: {(p or {}).get('type', 'any') if isinstance(p, dict) else 'any'}"
             for name, p in props.items()
         )
         print(f"  {tool['name']}({params})")
-        desc = (tool.get("description") or "").strip().splitlines()
+        desc = str(tool.get("description") or "").strip().splitlines()
         if desc:
             print(f"      {desc[0][:96]}")
     return EXIT_OK
@@ -351,7 +367,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             if errors:
                 return _err(f"the mapping has {len(errors)} errors; fix them or pass --no-validate")
         out_dir: Path = args.out_dir
-        out_dir.mkdir(parents=True, exist_ok=True)
+        try:  # fail before the run, not after it
+            out_dir.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            return _err(f"cannot create {out_dir}: {exc.strerror or exc}")
         data = run_benchmark(
             suite,
             mapping,
@@ -368,7 +387,10 @@ def cmd_run(args: argparse.Namespace) -> int:
             progress=lambda m: print(f"  {m}", file=sys.stderr),
         )
     dump_results(data, out_dir / "results.json")
-    (out_dir / "report.md").write_text(render(data, "markdown"), encoding="utf-8")
+    try:
+        (out_dir / "report.md").write_text(render(data, "markdown"), encoding="utf-8")
+    except OSError as exc:
+        return _err(f"cannot write {out_dir / 'report.md'}: {exc.strerror or exc}")
     sys.stdout.write(render(data, "text"))
     print(f"wrote {out_dir / 'results.json'} and {out_dir / 'report.md'}", file=sys.stderr)
     return EXIT_OK
@@ -376,6 +398,10 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 def cmd_replay(args: argparse.Namespace) -> int:
     data = load_results(args.results)
+    if args.diff:
+        changes = results_diff(load_results(args.diff), data)
+        _write(render_diff(changes, args.format), args.output)
+        return EXIT_FINDINGS if changes["regressions"] else EXIT_OK
     _write(render(data, args.format), args.output)
     return EXIT_OK
 

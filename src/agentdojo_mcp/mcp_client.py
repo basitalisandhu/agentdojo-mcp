@@ -133,7 +133,10 @@ class StdioTransport(_Transport):
     kind = "stdio"
 
     def __init__(self, command: str | list[str], env: dict[str, str] | None = None) -> None:
-        argv = shlex.split(command) if isinstance(command, str) else list(command)
+        try:
+            argv = shlex.split(command) if isinstance(command, str) else list(command)
+        except ValueError as exc:  # an unclosed quote
+            raise McpConnectionError(f"--stdio {command}: cannot split into words: {exc}") from None
         if not argv:
             raise McpConnectionError("--stdio needs a command")
         self.target = command if isinstance(command, str) else shlex.join(argv)
@@ -146,6 +149,9 @@ class StdioTransport(_Transport):
                 env=env if env is not None else child_environment(),
                 text=True,
                 encoding="utf-8",
+                # A server that writes bytes that are not UTF-8 must not kill the reader thread
+                # (the request would then wait for the full timeout); the line is skipped below.
+                errors="replace",
                 bufsize=1,
             )
         except OSError as exc:
@@ -165,7 +171,7 @@ class StdioTransport(_Transport):
                 continue
             try:
                 msg = json.loads(line)
-            except ValueError:
+            except (ValueError, RecursionError):
                 continue  # some servers print non-protocol text on stdout; skip it
             if isinstance(msg, dict):
                 self._messages.put(msg)
@@ -256,7 +262,7 @@ def _read_sse(response: Any, rid: int) -> dict[str, Any] | None:
             if data:
                 try:
                     msg = json.loads("\n".join(data))
-                except ValueError:
+                except (ValueError, RecursionError):
                     msg = None
                 if (
                     isinstance(msg, dict)
@@ -329,6 +335,8 @@ class HttpTransport(_Transport):
                     msg = json.loads(text) if text.strip() else None
                 except ValueError as exc:
                     raise McpError(f"{method}: response body is not JSON") from exc
+                except RecursionError:
+                    raise McpError(f"{method}: response JSON is nested too deeply") from None
         if not isinstance(msg, dict):
             raise McpError(f"{method}: no JSON-RPC response")
         return _rpc_result(msg, method)
@@ -393,7 +401,8 @@ class McpClient:
             page = result.get("tools") if isinstance(result, dict) else None
             if not isinstance(page, list):
                 raise McpError("tools/list: result has no tools array")
-            tools.extend(t for t in page if isinstance(t, dict))
+            # A tool without a string name cannot be called or mapped; leave it out.
+            tools.extend(t for t in page if isinstance(t, dict) and isinstance(t.get("name"), str))
             cursor = result.get("nextCursor")
             if not cursor:
                 return tools
@@ -450,7 +459,8 @@ def connect(
 def result_text(result: dict[str, Any]) -> str:
     """Join the text blocks of a ``tools/call`` result; other block types are summarised."""
     parts: list[str] = []
-    for block in result.get("content") or []:
+    content = result.get("content")
+    for block in content if isinstance(content, list) else []:
         if not isinstance(block, dict):
             continue
         if block.get("type") == "text":

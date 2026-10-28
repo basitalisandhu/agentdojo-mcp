@@ -1,4 +1,4 @@
-.PHONY: install install-dojo lint format test check build demo fixtures clean
+.PHONY: install install-dojo lint format test check e2e build demo fixtures clean
 
 PY ?= uv run
 FIX = tests/fixtures
@@ -22,6 +22,10 @@ test:
 	$(PY) pytest -q
 
 check: lint test
+
+# The README quick start against a fresh wheel install (with AgentDojo) in a temporary directory.
+e2e:
+	scripts/e2e_quickstart.sh
 
 build:
 	rm -rf dist

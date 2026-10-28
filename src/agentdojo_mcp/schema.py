@@ -141,6 +141,8 @@ def read_json(path: Path) -> Any:
         raise DumpError(f"cannot read {path}: {exc.strerror or exc}") from exc
     except ValueError as exc:
         raise DumpError(f"{path} is not valid JSON: {exc}") from exc
+    except RecursionError:
+        raise DumpError(f"{path} is not valid JSON: nested too deeply") from None
 
 
 def server_surface(data: Any, label: str = "server") -> Surface:

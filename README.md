@@ -88,7 +88,7 @@ agentdojo-mcp replay agentdojo-mcp-results/results.json --format markdown
 
 - You maintain an MCP server whose tools overlap a suite (mail, calendar, files, payments, chat, travel search) and want to know how an agent behaves when injected text arrives through your tool results.
 - You compare defences (AgentDojo's own, or a policy layer in front of your server) and want the comparison on the tools your agents really call.
-- You want a regression gate: the same mapping and task selection on every release of the server, results diffed with `replay --format json`.
+- You want a regression gate: the same mapping and task selection on every release of the server, then `replay new/results.json --diff old/results.json`, which exits 1 when a task lost utility or an attack newly succeeded.
 
 Not a fit when the server's domain has nothing in common with any suite; write your own AgentDojo suite first (`--suite file.py:attr` accepts any `TaskSuite`).
 
@@ -125,9 +125,9 @@ uvx --from git+https://github.com/basitalisandhu/agentdojo-mcp agentdojo-mcp --h
 Container image: each release tag publishes `ghcr.io/basitalisandhu/agentdojo-mcp` (core only, linux/amd64 and linux/arm64), running as uid 1000 in `/work`. It suits `inspect` against HTTP servers, mapping work and `replay`:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/agentdojo-mcp:0.3.0 \
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/agentdojo-mcp:0.4.0 \
   replay results.json --format markdown
-docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.3.0 inspect --url https://mcp.example.com/mcp
+docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.4.0 inspect --url https://mcp.example.com/mcp
 ```
 
 ## Commands
@@ -138,7 +138,7 @@ docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.3.0 inspect --url https:/
 | `map --suite SUITE --server-dump FILE [-o FILE] [--force]` | proposes a mapping | 0, 2 |
 | `validate-mapping MAPPING --suite SUITE --server-dump FILE [--strict] [--json]` | checks names, parameters, required arguments, types, modes and the seed tool | 0, 1 errors (or warnings with `--strict`), 2 |
 | `run --suite SUITE --mapping FILE (--stdio CMD \| --url URL) --model MODEL [--tasks ID\|GLOB]... [--injection-task ID\|GLOB]... [--attack NAME] [--defense NAME] [--out-dir DIR]` | runs the benchmark through the bridge; task values accept case-sensitive glob patterns | 0, 2 |
-| `replay RESULTS [--format text\|markdown\|json] [-o FILE]` | re-renders a results file | 0, 2 |
+| `replay RESULTS [--format text\|markdown\|json] [-o FILE] [--diff OLD]` | re-renders a results file; with `--diff`, lists the user tasks and pairs whose utility or attack success changed since `OLD` and the change in each rate | 0; 1 with `--diff` when a task or pair lost utility or an attack newly succeeded; 2 |
 | `suites [--json]` | the bridging profile above, for any benchmark version | 0, 2 |
 | `dump-suite --suite SUITE [-o FILE]` | writes a suite's tools as JSON, so `map` can run where AgentDojo is not installed | 0, 2 |
 
@@ -147,6 +147,47 @@ docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.3.0 inspect --url https:/
 Keys and endpoints: agentdojo-mcp never reads or stores API keys. AgentDojo and the provider SDKs read their documented variables (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `CO_API_KEY`, `TOGETHER_API_KEY`, `GCP_PROJECT` and `GCP_LOCATION`, `LOCAL_LLM_PORT`, `OPENAI_COMPATIBLE_BASE_URL` and `OPENAI_COMPATIBLE_API_KEY`). A stdio server gets only `PATH`, `HOME` and a few basics from your environment, so those keys do not reach it; pass what it needs with `-e`. An HTTP header value written `${VAR}` is read from the environment, so tokens stay off the command line.
 
 Attacks that address the model by name (`important_instructions` and its variants) need a model name AgentDojo recognises; with others, or with `ground-truth`, use an attack that does not, such as `direct` or `ignore_previous`. `run` checks this before anything starts.
+
+## Comparing two runs
+
+`replay NEW --diff OLD` compares two results files task by task:
+
+```text
+$ agentdojo-mcp replay new/results.json --diff old/results.json
+agentdojo-mcp diff (old -> new)
+
+  Utility, no attack       2/3 (66.7%) -> 3/3 (100.0%)
+  Utility under attack     3/3 (100.0%) -> 3/3 (100.0%)
+  Targeted attack success  1/3 (33.3%) -> 2/3 (66.7%)
+  Injection goals doable   1/1 (100.0%) -> 1/1 (100.0%)
+
+Changed tasks
+  user_task_1: utility no -> yes
+  REGRESSION user_task_0 + injection_task_0: attack succeeded no -> yes
+
+1 regression(s)
+```
+
+A regression is a user task or (user task, injection task) pair that lost utility, or a pair whose attack now succeeds; any regression makes the exit code 1. Tasks in only one run are listed but do not count. A different suite, benchmark version, attack or model is reported as a note. `--format markdown` and `--format json` give the same content for a pull request comment or a script.
+
+## Troubleshooting
+
+Real messages and what to do about them. Errors exit 2.
+
+| Message | Cause and fix |
+| --- | --- |
+| `agentdojo-mcp: error: this command needs AgentDojo. Install it with: pip install "agentdojo-mcp[dojo]"` | `run`, `suites` and `dump-suite` need the `dojo` extra; the core install covers `inspect`, `map`, `validate-mapping` and `replay`. |
+| `ERROR: Package 'agentdojo-mcp' requires a different Python: 3.10.12 not in '>=3.11'` | Use Python 3.11 or newer. |
+| `agentdojo-mcp: error: cannot start my-server: [Errno 2] No such file or directory: 'my-server'` | The `--stdio` command is not on `PATH`. Give the full path or `python3 path/to/server.py`. |
+| `agentdojo-mcp: error: initialize: server process exited with code 3` | The server started and then stopped. Run the `--stdio` command by hand to see why; the last stderr line is appended when the server wrote one. Pass variables it needs with `-e NAME`. |
+| `agentdojo-mcp: error: --stdio python -c 'x: cannot split into words: No closing quotation` | The command is split like a shell line. Close the quote. |
+| `agentdojo-mcp: error: --url http://10.1.2.3/mcp: plain http is only accepted for localhost; use https or --allow-http` | Use the server's `https` URL, or `--allow-http` on a network you trust. |
+| `error   tools.read_note: suite has no tool 'read_note'; did you mean read_file?` | The mapping was written for another suite. Check `suite:` in the mapping and the `--suite` you passed. |
+| `agentdojo-mcp: error: m.yaml: not UTF-8 text (byte 0xe9 at offset 21); save it as UTF-8` | The mapping was saved in a legacy encoding. Re-save it as UTF-8. |
+| `agentdojo-mcp: error: m.yaml: line 7: unexpected indentation` | Mapping files use a small YAML subset: spaces only, two per level. Anchors, tags and multi-line strings are not supported; JSON works too. |
+| `agentdojo-mcp: error: server.json: not an agentdojo-mcp results file (format 1)` | `replay` reads the `results.json` that `run` wrote, not a server or suite dump. |
+| `agentdojo-mcp: error: results.json: calls[3].result_bytes must be an integer` | The results file was edited by hand or truncated. Re-run, or fix the named field. |
+| `agentdojo-mcp: error: mapping.yaml exists; pass --force to overwrite it` | `map` does not overwrite a mapping you may have edited. Pass `--force`, or write to a new file. |
 
 ## What this is not
 
