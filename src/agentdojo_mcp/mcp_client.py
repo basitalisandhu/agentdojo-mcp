@@ -23,7 +23,7 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Any
 
-from . import __version__
+from . import __version__, _jsondepth
 
 PROTOCOL_VERSION = "2025-06-18"
 DEFAULT_TIMEOUT = 30.0
@@ -180,7 +180,7 @@ class StdioTransport(_Transport):
                 if not line:
                     continue
                 try:
-                    msg = json.loads(line)
+                    msg = _jsondepth.loads(line)
                 except (ValueError, RecursionError):
                     continue  # some servers print non-protocol text on stdout; skip it
                 if isinstance(msg, dict):
@@ -275,7 +275,7 @@ def _read_sse(response: Any, rid: int) -> dict[str, Any] | None:
         if line == "":
             if data:
                 try:
-                    msg = json.loads("\n".join(data))
+                    msg = _jsondepth.loads("\n".join(data))
                 except (ValueError, RecursionError):
                     msg = None
                 if (
@@ -346,7 +346,7 @@ class HttpTransport(_Transport):
             else:
                 text = response.read().decode("utf-8", errors="replace")
                 try:
-                    msg = json.loads(text) if text.strip() else None
+                    msg = _jsondepth.loads(text) if text.strip() else None
                 except (ValueError, RecursionError) as exc:
                     raise McpError(f"{method}: response body is not JSON") from exc
         if not isinstance(msg, dict):

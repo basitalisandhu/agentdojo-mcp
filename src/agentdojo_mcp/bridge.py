@@ -29,7 +29,7 @@ from fnmatch import fnmatchcase
 from pathlib import Path
 from typing import Any
 
-from . import __version__
+from . import __version__, _jsondepth
 from .dojo import agentdojo_version, require
 from .mapping import Mapping, Seed, ToolMap
 from .mcp_client import McpClient, McpConnectionError, McpError, result_text
@@ -100,8 +100,8 @@ def convert_result(result: dict[str, Any], how: str) -> Any:
         return structured
     if how == "json":
         try:
-            return json.loads(text)
-        except ValueError:
+            return _jsondepth.loads(text)
+        except (ValueError, RecursionError):
             return text
     return text
 
