@@ -24,6 +24,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from . import _jsondepth
+
 RESULTS_FORMAT = 1
 
 
@@ -68,7 +70,7 @@ class Summary:
 
 def load(path: Path) -> dict[str, Any]:
     try:
-        data = json.loads(path.read_text(encoding="utf-8"))
+        data = _jsondepth.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise ResultsError(f"cannot read {path}: {exc.strerror or exc}") from exc
     except RecursionError:

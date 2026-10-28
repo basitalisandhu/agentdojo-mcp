@@ -13,6 +13,8 @@ import json
 import re
 from typing import Any
 
+from . import _jsondepth
+
 _PLAIN_SAFE = re.compile(r"^[A-Za-z_./][A-Za-z0-9_./@+-]*( [A-Za-z0-9_./@+-]+)*$")
 _NUMBER = re.compile(r"^-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][-+]?[0-9]+)?$")
 _RESERVED = {"true", "false", "null", "yes", "no", "on", "off", "~", ""}
@@ -101,7 +103,7 @@ def parse_scalar(text: str, line: int | None = None) -> Any:
         return False
     if text[0] in '{["':
         try:
-            return json.loads(text)
+            return _jsondepth.loads(text)
         except ValueError as exc:
             raise YamlError(f"cannot parse {text!r} as a JSON flow value: {exc}", line) from exc
     if text[0] == "'":
@@ -143,7 +145,7 @@ def _load(text: str) -> Any:
     stripped = text.lstrip()
     if stripped.startswith("{"):
         try:
-            return json.loads(text)
+            return _jsondepth.loads(text)
         except ValueError as exc:
             raise YamlError(f"invalid JSON: {exc}") from exc
     rows: list[tuple[int, int, str]] = []

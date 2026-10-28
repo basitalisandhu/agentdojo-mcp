@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-29
+
+### Fixed
+
+- Deeply nested JSON in a mapping file, server dump or results file exits 2 with "nested too deeply" on every supported Python, and a deep JSON tool result mapped with `result: json` is returned as text instead of raising. Python 3.14 no longer raises `RecursionError` from `json.loads` at the old depth, so JSON is now checked for nesting first (limit 200 levels).
+- CI tests Python 3.14.
+
 ## [0.4.0] - 2026-10-28
 
 ### Added
@@ -58,7 +65,8 @@ All notable changes to this project are documented here. The format follows
 - `agentdojo-mcp suites` and `dump-suite`: the bridging profile of AgentDojo's built-in suites, and suite dumps for offline mapping.
 - Fixture MCP server, fixture AgentDojo suite and fixture results; CI on Python 3.11 and 3.12 with a separate AgentDojo job; container image `ghcr.io/basitalisandhu/agentdojo-mcp` published on version tags with an SPDX SBOM, a build provenance attestation and a keyless cosign signature; PyPI trusted publishing, off until the repository variable `PYPI_PUBLISH` is set.
 
-[Unreleased]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/basitalisandhu/agentdojo-mcp/compare/v0.1.0...v0.2.0

@@ -7,10 +7,11 @@ is accepted too. Both reduce to :class:`ToolSpec`, so mapping and validation run
 
 from __future__ import annotations
 
-import json
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+
+from . import _jsondepth
 
 SUITE_DUMP_FORMAT = "agentdojo-mcp/suite-dump"
 
@@ -138,7 +139,7 @@ def tool_from_schema(raw: dict[str, Any], mutates: bool | None = None) -> ToolSp
 
 def read_json(path: Path) -> Any:
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        return _jsondepth.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise DumpError(f"cannot read {path}: {exc.strerror or exc}") from exc
     except RecursionError:
