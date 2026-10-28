@@ -16,12 +16,15 @@ def _yes(value: Any) -> str:
 
 
 def _args(arguments: Any, width: int = ARG_WIDTH) -> str:
-    text = json.dumps(arguments, ensure_ascii=False, sort_keys=True, separators=(", ", ": "))
+    try:
+        text = json.dumps(arguments, ensure_ascii=False, sort_keys=True, separators=(", ", ": "))
+    except (TypeError, ValueError, RecursionError):
+        text = "(arguments cannot be shown)"
     return text if len(text) <= width else text[: width - 3] + "..."
 
 
 def _task(call: dict[str, Any]) -> str:
-    ut = call.get("user_task") or "-"
+    ut = str(call.get("user_task") or "-")
     it = call.get("injection_task")
     return f"{ut} + {it}" if it else ut
 
@@ -31,7 +34,8 @@ def _header(data: dict[str, Any]) -> list[tuple[str, str]]:
     mapping = data.get("mapping", {}) or {}
     modes: dict[str, int] = {}
     for entry in (mapping.get("tools") or {}).values():
-        modes[entry.get("mode", "local")] = modes.get(entry.get("mode", "local"), 0) + 1
+        mode = str(entry.get("mode", "local"))
+        modes[mode] = modes.get(mode, 0) + 1
     mode_text = ", ".join(f"{n} {m}" for m, n in sorted(modes.items())) or "-"
     srv = " ".join(x for x in (server.get("name"), server.get("version")) if x) or "-"
     return [
@@ -89,7 +93,7 @@ def render_text(data: dict[str, Any], max_calls: int = 20) -> str:
         arrow = f"{call['suite_tool']} -> {call.get('server_tool') or '-'}"
         err = "  ERROR" if call.get("is_error") else ""
         out.append(
-            f"  #{call.get('seq', '?'):<3} {_task(call)}  {arrow}  {_args(call.get('arguments', {}), 44)}"
+            f"  #{call.get('seq', '?')!s:<3} {_task(call)}  {arrow}  {_args(call.get('arguments', {}), 44)}"
             f"  {call.get('result_bytes', 0)} B{err}"
         )
     if len(calls) > max_calls:
@@ -195,3 +199,59 @@ def render(data: dict[str, Any], fmt: str) -> str:
     if fmt == "json":
         return render_json(data)
     return render_text(data)
+
+
+DIFF_LABELS = {
+    "utility": "Utility, no attack",
+    "utility_under_attack": "Utility under attack",
+    "attack_success": "Targeted attack success",
+    "injection_tasks_solvable": "Injection goals doable",
+}
+
+
+def render_diff(d: dict[str, Any], new_label: str, old_label: str, fmt: str = "text") -> str:
+    """The result of :func:`agentdojo_mcp.results.diff` as text, Markdown or JSON."""
+    if fmt == "json":
+        return json.dumps(d, indent=2, ensure_ascii=False) + "\n"
+    md = fmt == "markdown"
+    out = [
+        f"# agentdojo-mcp diff: {new_label} against {old_label}"
+        if md
+        else f"agentdojo-mcp diff: {new_label} against {old_label}",
+        "",
+    ]
+    width = max(len(v) for v in DIFF_LABELS.values())
+    if md:
+        out += ["| Measure | Before | After |", "|---|---|---|"]
+    for key, label in DIFF_LABELS.items():
+        r = d["rates"][key]
+        mark = "" if r["old"] == r["new"] else "  (changed)"
+        out.append(
+            f"| {label} | {r['old']} | {r['new']} |"
+            if md
+            else f"  {label:<{width}}  {r['old']} -> {r['new']}{mark}"
+        )
+    out += ["", "## Changed" if md else f"Changed ({len(d['changes'])})"]
+    if md:
+        out.append("")
+    for c in d["changes"]:
+        line = f"{c['kind']} {c['id']}: {c['field']} {_yes(c['old'])} -> {_yes(c['new'])}"
+        out.append(f"- {_md_cell(line)}" if md else f"  {line}")
+    if not d["changes"]:
+        out.append("- none" if md else "  none")
+    for title, items in (
+        ("Only in the new file", d["added"]),
+        ("Only in the old file", d["removed"]),
+    ):
+        if items:
+            out += ["", f"## {title}" if md else title]
+            if md:
+                out.append("")
+            out += [f"- {_md_cell(i)}" if md else f"  {i}" for i in items]
+    verdict = (
+        "regressed: attack success went up or utility went down"
+        if d["regressed"]
+        else "no regression in the headline rates"
+    )
+    out += ["", verdict]
+    return "\n".join(out) + "\n"

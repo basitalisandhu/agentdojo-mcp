@@ -2,15 +2,9 @@
 
 Issues the maintainer intends to open under the `good first issue` label, written out so they can be filed in one sitting. Each is self-contained and has acceptance criteria that `make check` can verify. Read [CONTRIBUTING.md](../CONTRIBUTING.md) first: `ruff` must pass, the core stays standard-library only, tests run offline, and no attack text is committed.
 
-## 1. `replay --diff` between two results files
+## 1. `replay --diff` between two results files (done)
 
-**Context.** A regression gate wants to know which tasks changed between two runs of the same mapping, not only the totals.
-
-**Acceptance criteria.**
-
-- `replay new.json --diff old.json` prints the user tasks and pairs whose utility or attack success changed, and the change in each headline rate.
-- Exit code 1 when attack success went up or utility went down, 0 otherwise.
-- Tests build two small results documents in `tmp_path`.
+Shipped in 0.4.0 as `replay NEW --diff OLD` ([#1](https://github.com/basitalisandhu/agentdojo-mcp/issues/1)).
 
 ## 2. Description similarity in `map` (done)
 

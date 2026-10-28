@@ -45,7 +45,12 @@ def pick_tasks(
     selected: dict[str, Any] = {}
     missing = []
     for pattern in ids:
-        matches = [name for name in available if fnmatchcase(name, pattern)]
+        if not any(ch in pattern for ch in "*?["):
+            # A plain id is a dictionary lookup; scanning every task for each of many plain
+            # --tasks ids made selection quadratic.
+            matches = [pattern] if pattern in available else []
+        else:
+            matches = [name for name in available if fnmatchcase(name, pattern)]
         if not matches:
             missing.append(pattern)
         for name in matches:

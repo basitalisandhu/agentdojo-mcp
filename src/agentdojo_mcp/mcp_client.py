@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import os
 import queue
+import re
 import shlex
 import subprocess
 import sys
@@ -75,10 +76,16 @@ class ServerInfo:
         }
 
 
+_ENV_NAME = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+
+
 def child_environment(extra: list[str] | None = None) -> dict[str, str]:
     """The default environment plus ``KEY=VALUE`` entries; a bare ``KEY`` copies it from ours."""
     env = {k: os.environ[k] for k in DEFAULT_ENV_KEYS if k in os.environ}
     for item in extra or []:
+        name = item.split("=", 1)[0]
+        if not _ENV_NAME.match(name) or "\0" in item:
+            raise McpError(f"--env {item!r}: expected KEY or KEY=VALUE with a variable name")
         if "=" in item:
             key, value = item.split("=", 1)
             env[key] = value
@@ -96,7 +103,11 @@ def parse_headers(items: list[str] | None) -> dict[str, str]:
         if ":" not in item:
             raise McpError(f"--header {item!r}: expected 'Name: value'")
         name, value = item.split(":", 1)
+        if not re.fullmatch(r"[!#$%&'*+.^_`|~0-9A-Za-z-]+", name.strip()):
+            raise McpError(f"--header {item!r}: {name.strip()!r} is not a valid header name")
         value = value.strip()
+        if "\n" in value or "\r" in value:
+            raise McpError(f"--header {name.strip()}: the value must not contain a line break")
         if value.startswith("${") and value.endswith("}"):
             var = value[2:-1]
             if var not in os.environ:
@@ -133,7 +144,10 @@ class StdioTransport(_Transport):
     kind = "stdio"
 
     def __init__(self, command: str | list[str], env: dict[str, str] | None = None) -> None:
-        argv = shlex.split(command) if isinstance(command, str) else list(command)
+        try:
+            argv = shlex.split(command) if isinstance(command, str) else list(command)
+        except ValueError as exc:  # an unclosed quote, for example
+            raise McpConnectionError(f"--stdio {command!r}: {exc}") from None
         if not argv:
             raise McpConnectionError("--stdio needs a command")
         self.target = command if isinstance(command, str) else shlex.join(argv)
@@ -146,9 +160,10 @@ class StdioTransport(_Transport):
                 env=env if env is not None else child_environment(),
                 text=True,
                 encoding="utf-8",
+                errors="replace",  # a stray non-UTF-8 byte must not stop the reader thread
                 bufsize=1,
             )
-        except OSError as exc:
+        except (OSError, ValueError) as exc:  # ValueError: a NUL byte in the command
             raise McpConnectionError(f"cannot start {argv[0]}: {exc}") from exc
         self._next_id = 1
         self._messages: queue.Queue[dict[str, Any] | None] = queue.Queue()
@@ -159,17 +174,22 @@ class StdioTransport(_Transport):
 
     def _read_stdout(self) -> None:
         assert self.proc.stdout is not None
-        for line in self.proc.stdout:
-            line = line.strip()
-            if not line:
-                continue
-            try:
-                msg = json.loads(line)
-            except ValueError:
-                continue  # some servers print non-protocol text on stdout; skip it
-            if isinstance(msg, dict):
-                self._messages.put(msg)
-        self._messages.put(None)
+        try:
+            for line in self.proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    msg = json.loads(line)
+                except (ValueError, RecursionError):
+                    continue  # some servers print non-protocol text on stdout; skip it
+                if isinstance(msg, dict):
+                    self._messages.put(msg)
+        except (OSError, ValueError):  # the pipe closed under us
+            pass
+        finally:
+            # Always wake a waiting request, so a reader that stops never leaves it hanging.
+            self._messages.put(None)
 
     def _read_stderr(self) -> None:
         assert self.proc.stderr is not None
@@ -256,7 +276,7 @@ def _read_sse(response: Any, rid: int) -> dict[str, Any] | None:
             if data:
                 try:
                     msg = json.loads("\n".join(data))
-                except ValueError:
+                except (ValueError, RecursionError):
                     msg = None
                 if (
                     isinstance(msg, dict)
@@ -327,7 +347,7 @@ class HttpTransport(_Transport):
                 text = response.read().decode("utf-8", errors="replace")
                 try:
                     msg = json.loads(text) if text.strip() else None
-                except ValueError as exc:
+                except (ValueError, RecursionError) as exc:
                     raise McpError(f"{method}: response body is not JSON") from exc
         if not isinstance(msg, dict):
             raise McpError(f"{method}: no JSON-RPC response")
@@ -371,7 +391,8 @@ class McpClient:
         )
         if not isinstance(result, dict):
             raise McpError("initialize: result is not an object")
-        info = result.get("serverInfo") or {}
+        info = result.get("serverInfo")
+        info = info if isinstance(info, dict) else {}
         self.server = ServerInfo(
             name=str(info.get("name", "")),
             version=str(info.get("version", "")),
@@ -393,8 +414,10 @@ class McpClient:
             page = result.get("tools") if isinstance(result, dict) else None
             if not isinstance(page, list):
                 raise McpError("tools/list: result has no tools array")
-            tools.extend(t for t in page if isinstance(t, dict))
+            tools.extend(t for t in page if isinstance(t, dict) and isinstance(t.get("name"), str))
             cursor = result.get("nextCursor")
+            if cursor is not None and not isinstance(cursor, str):
+                raise McpError("tools/list: nextCursor is not a string")
             if not cursor:
                 return tools
         raise McpError("tools/list: more than 1000 pages; giving up")

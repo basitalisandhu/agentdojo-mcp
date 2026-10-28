@@ -133,6 +133,13 @@ def _split_key(content: str, line: int) -> tuple[str, str]:
 
 def load(text: str) -> Any:
     """Parse JSON or the YAML subset described in the module docstring."""
+    try:
+        return _load(text)
+    except RecursionError:
+        raise YamlError("nested too deeply") from None
+
+
+def _load(text: str) -> Any:
     stripped = text.lstrip()
     if stripped.startswith("{"):
         try:

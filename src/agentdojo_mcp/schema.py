@@ -111,7 +111,9 @@ def tool_from_schema(raw: dict[str, Any], mutates: bool | None = None) -> ToolSp
     if not isinstance(schema, dict):
         raise DumpError(f"tool {name}: inputSchema is not an object")
     props = schema.get("properties")
-    required = schema.get("required") or []
+    required = schema.get("required")
+    # "required" should be a list of names; anything else (a string, a number) means none.
+    required = {r for r in required if isinstance(r, str)} if isinstance(required, list) else set()
     params: dict[str, Param] = {}
     if isinstance(props, dict):
         for pname, pschema in props.items():
@@ -139,6 +141,8 @@ def read_json(path: Path) -> Any:
         return json.loads(path.read_text(encoding="utf-8"))
     except OSError as exc:
         raise DumpError(f"cannot read {path}: {exc.strerror or exc}") from exc
+    except RecursionError:
+        raise DumpError(f"{path} is not valid JSON: nested too deeply") from None
     except ValueError as exc:
         raise DumpError(f"{path} is not valid JSON: {exc}") from exc
 

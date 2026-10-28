@@ -88,7 +88,7 @@ agentdojo-mcp replay agentdojo-mcp-results/results.json --format markdown
 
 - You maintain an MCP server whose tools overlap a suite (mail, calendar, files, payments, chat, travel search) and want to know how an agent behaves when injected text arrives through your tool results.
 - You compare defences (AgentDojo's own, or a policy layer in front of your server) and want the comparison on the tools your agents really call.
-- You want a regression gate: the same mapping and task selection on every release of the server, results diffed with `replay --format json`.
+- You want a regression gate: the same mapping and task selection on every release of the server, then `agentdojo-mcp replay new/results.json --diff old/results.json`, which lists every task and pair whose utility or attack success changed and exits 1 when attack success went up or utility went down.
 
 Not a fit when the server's domain has nothing in common with any suite; write your own AgentDojo suite first (`--suite file.py:attr` accepts any `TaskSuite`).
 
@@ -125,9 +125,9 @@ uvx --from git+https://github.com/basitalisandhu/agentdojo-mcp agentdojo-mcp --h
 Container image: each release tag publishes `ghcr.io/basitalisandhu/agentdojo-mcp` (core only, linux/amd64 and linux/arm64), running as uid 1000 in `/work`. It suits `inspect` against HTTP servers, mapping work and `replay`:
 
 ```bash
-docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/agentdojo-mcp:0.3.0 \
+docker run --rm -v "$PWD:/work" ghcr.io/basitalisandhu/agentdojo-mcp:0.4.0 \
   replay results.json --format markdown
-docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.3.0 inspect --url https://mcp.example.com/mcp
+docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.4.0 inspect --url https://mcp.example.com/mcp
 ```
 
 ## Commands
@@ -138,7 +138,7 @@ docker run --rm ghcr.io/basitalisandhu/agentdojo-mcp:0.3.0 inspect --url https:/
 | `map --suite SUITE --server-dump FILE [-o FILE] [--force]` | proposes a mapping | 0, 2 |
 | `validate-mapping MAPPING --suite SUITE --server-dump FILE [--strict] [--json]` | checks names, parameters, required arguments, types, modes and the seed tool | 0, 1 errors (or warnings with `--strict`), 2 |
 | `run --suite SUITE --mapping FILE (--stdio CMD \| --url URL) --model MODEL [--tasks ID\|GLOB]... [--injection-task ID\|GLOB]... [--attack NAME] [--defense NAME] [--out-dir DIR]` | runs the benchmark through the bridge; task values accept case-sensitive glob patterns | 0, 2 |
-| `replay RESULTS [--format text\|markdown\|json] [-o FILE]` | re-renders a results file | 0, 2 |
+| `replay RESULTS [--format text\|markdown\|json] [-o FILE] [--diff OLD]` | re-renders a results file; with `--diff OLD`, shows each headline rate before and after and every user task, injection task and pair whose utility or attack success changed | 0; 1 with `--diff` when attack success went up or utility (without or under attack) went down; 2 |
 | `suites [--json]` | the bridging profile above, for any benchmark version | 0, 2 |
 | `dump-suite --suite SUITE [-o FILE]` | writes a suite's tools as JSON, so `map` can run where AgentDojo is not installed | 0, 2 |
 
@@ -168,6 +168,21 @@ Attacks that address the model by name (`important_instructions` and its variant
 - Without a `seed` tool, injections reach the agent only through `local` and `both` tools or through data the server already holds.
 - Result conversion is simple: `structuredContent` when present, else the joined text blocks (or parsed JSON with `result: json`). AgentDojo formats it for the model as it would a Python return value.
 - Each run starts one server process (stdio) or session (HTTP) and seeds it per task; servers that cannot reset their state between tasks will leak state from one task into the next.
+
+## Troubleshooting
+
+| Symptom | Cause and fix |
+| --- | --- |
+| `run`, `suites` or `dump-suite` says it needs AgentDojo | Install the extra: `pip install ".[dojo]"` from a clone, or `pip install "agentdojo-mcp[dojo] @ git+https://github.com/basitalisandhu/agentdojo-mcp"`. The core commands work without it. |
+| `pip` refuses to install, or `requires-python` errors | agentdojo-mcp needs Python 3.11 or newer. Check with `python3 --version` and create the virtual environment with a newer interpreter. |
+| `agentdojo-mcp: command not found` | The virtual environment is not active: `. .venv/bin/activate`, or run `python -m agentdojo_mcp`. |
+| `inspect` or `run` fails with `server process exited with code ...` | The stdio server did not start. The last stderr line is shown; run the `--stdio` command by hand to see all of it. The server gets only `PATH`, `HOME` and a few basics, so pass the variables it needs with `-e KEY` or `-e KEY=VALUE`. |
+| `no response within 30s` | The server is slow or never answers on stdout. Raise `--timeout`, and check that the server writes JSON-RPC messages one per line on stdout and its logs on stderr. |
+| `plain http` is refused for a remote `--url` | Use `https`, or pass `--allow-http` if the endpoint is on a network you trust. |
+| `validate-mapping` reports errors | Each finding names the key (`tools.<name>.arguments.<param>` and so on). Fix the mapping file, or rerun `map` against a fresh `inspect -o` dump if the server's tools changed. |
+| Every user task fails with `--model ground-truth` | The mapping or the server differs from the suite, not the model: check the `seed` tool, tools that change state (use mode `both`), and the per-call log in `report.md`. |
+| `important_instructions` refuses to start with `ground-truth` | That attack needs a model name AgentDojo recognises. Use `--attack direct` (or another attack that does not name the model) for ground-truth runs. |
+| A `--tasks` pattern matches nothing | Patterns are case-sensitive globs; quote them (`'user_task_1*'`) so the shell does not expand them first. |
 
 ## Contributing
 
